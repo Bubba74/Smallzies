@@ -1,27 +1,42 @@
 
+#include <cstring>
+#include <string>
 #include <stdlib.h>
 #include <chrono>
 	int64_t time();
 #include <iostream>
 	using namespace std;
 
-const int SIZE = 120000;
+#define RECT_CACHE 0
+#define RECURSION  1
+#define LINE_CACHE 2
+
+#define METHOD LINE_CACHE
+
+
+#if METHOD == LINE_CACHE
+int SIZE = 12000;
+int REDS = SIZE;
+int BLACKS = SIZE;
+#else
+const int SIZE = 12000;
 const int REDS = SIZE;
 const int BLACKS = SIZE;
+#endif
 const bool debug = false;
 
 const char GREEN[20] = "\033[1;32m";
 const char RED[20] = "\033[1;31m";
 const char RESET[10] = "\033[0m";
 
-//bool print = REDS+BLACKS < 300;
-const bool print = false;
-const bool print_nums = true;
-const bool recurse = false;
+enum Output {ALL, GRID, TIME, PROFIT};
+bool outputs[4] = {false, false, false, false};
 
-#define DYN_CACHE
+bool print = false;
+bool print_nums = true;
 
-#ifndef DYN_CACHE
+
+#if METHOD == RECT_CACHE || METHOD == RECURSION
 int64_t cache_start = time();
 double *cache[REDS+1];
 int64_t cache_end = time();
@@ -78,9 +93,8 @@ double fill(int r,int b){
                 return cache_val(r,b,0);
         return cache_val(r,b,ep);
 }
-#endif
 
-#ifdef DYN_CACHE
+#elif METHOD == LINE_CACHE
 double *cache[2] = {nullptr, nullptr};
 
 int max(int a, int b){
@@ -96,12 +110,16 @@ double scanto(int red, int black){
 	int xoff = 0, length = 0;
 
 	for (int i=0; i<layers; i++){
-		if (i % 1000 == 0) cout << "Reached layer: " << i << endl;
+		if (outputs[Output::ALL])
+			if (i % 1000  == 0) cout << "Reached layer: " << i << endl;
+
+		//Free first layer cache if it exists
 		if (cache[0] != nullptr){
 			free(cache[0]);
 			cache[0] = nullptr;
 		}
-		cache[0] = cache[1]; //Shift cache down one
+		//Shift second layer cache into first layer
+		cache[0] = cache[1];
 
 
 		//If the right bound exceeds B, decrease length by 1
@@ -116,21 +134,7 @@ double scanto(int red, int black){
 		
 		cache[1] = (double *) malloc( (length+1) * sizeof(double) );
 
-		/*
- 			if the line is (i+1) nums long, then the max R val is (i) and max B value is (i)
-			if (red > black) then left is min(i, red) and right is min(
-			mr = min(i,   red) where i is the possible highest Red value and red is the required number
-			mb = min(b, black) where b is the possible highest Black value and black is the required number
-
-			
-
-
-* 		*/
-
-		if (debug) cout << "Xoff {" << xoff << "} length {" << length << "}" << endl;
 		for (int j=0; j<length+1; j++){
-			if (debug) cout << j << " " << flush;
-
 			r = i-xoff-j;	b = xoff+j;
 			if(r==0){
 				cache[1][j] = 0;
@@ -140,7 +144,7 @@ double scanto(int red, int black){
 				cache[1][j] = r;
 				continue;
 			}
-	
+
         		double ep=0;
         		ep += ( cache[0][j+(xoff>0?1:0)]   + 1) * ((0.0+r)/(r+b));
         		ep += ( cache[0][j+(xoff>0?1:0)-1] - 1) * ((0.0+b)/(r+b));
@@ -151,20 +155,20 @@ double scanto(int red, int black){
 			}
 			cache[1][j] = ep;
 		}
-		if (debug)
+
+		if (print && outputs[Output::ALL]){
+			for (int i=0; i<xoff; i++)
+				printf("%6s ", "");
+			for (int i=0; i<length+1; i++)
+				printf("%6.2f ", cache[1][i]);
 			cout << endl;
+		}
 
 		//If the layer still starts at the bottom left, increase the length 1
 		if (xoff == 0)
 			length++;
 		else //Otherwise increase xoff to keep right bound
 			xoff++;
-	}
-	if (print){
-		cout << "Finished rect with xoff {" << xoff << "} and length {" << length << "}" << endl;
-		for (int i=0; i<length; i++)
-			cout << cache[1][i] << " ";
-		cout << endl;
 	}
 
 	return cache[1][0];
@@ -173,27 +177,60 @@ double scanto(int red, int black){
 
 
 void fill_grid(){
-#ifndef DYN_CACHE
-	if (recurse){
-		cout << "Solving for [" << REDS << "," << BLACKS << "] recursively" << endl << flush;
-		cout << endl << ev(REDS,BLACKS) << endl;
-	} else {
-		cout << "Solving for [" << REDS << "," << BLACKS << "] progressively" << endl << flush;
-		for (int i=0; i<REDS+1; i++)
-			for (int j=0; j<BLACKS+1; j++)
-				fill(i,j);
-		cout << endl << cache[REDS][BLACKS] << endl;
-	}
-#endif
-#ifdef DYN_CACHE
-	cout << "Solving for [" << REDS << "," << BLACKS << "] scan-progressively" << endl << flush;
-	cout << scanto(REDS, BLACKS) << endl;
+#if METHOD == RECURSION
+	cout << "Solving for [" << REDS << "," << BLACKS << "] recursively" << endl << flush;
+	cout << endl << ev(REDS,BLACKS) << endl;
+#elif METHOD == RECT_CACHE
+	cout << "Solving for [" << REDS << "," << BLACKS << "] progressively" << endl << flush;
+	for (int i=0; i<REDS+1; i++)
+		for (int j=0; j<BLACKS+1; j++)
+			fill(i,j);
+	cout << endl << cache[REDS][BLACKS] << endl;
+#elif METHOD == LINE_CACHE
+	if (outputs[Output::ALL])
+		cout << "Solving for [" << REDS << "," << BLACKS << "] scan-progressively" << endl << flush;
+
+	double profit = scanto(REDS, BLACKS);
+
+	if (outputs[Output::ALL])
+		cout << "Expected profit: " << profit << endl;
+
+	if (outputs[Output::PROFIT])
+		cout << profit << " ";
 #endif
 }//fill_grid
 
-int main() {
+int main(int argc, char *argv[]){
+	if (argc > 1){
+#if METHOD != LINE_CACHE
+		cout << "Can only specify command-line deck size if process is a linear cache" << endl;
+#else
+		int size = stoi(argv[1]);
+		SIZE = size;
+		BLACKS = size;
+		REDS = size;
+#endif
+		if (argc > 2){
+			if (strcmp(argv[2], "all") == 0)
+				outputs[Output::ALL] = true;
+			else if (strcmp(argv[2], "time") == 0)
+				outputs[Output::TIME] = true;
+			else if (strcmp(argv[2], "profit") == 0)
+				outputs[Output::PROFIT] = true;
+			else if (strcmp(argv[2], "sum") == 0){
+				outputs[Output::GRID] = true;
+				outputs[Output::TIME] = true;
+				outputs[Output::PROFIT] = true;
+			}
+			else
+				outputs[Output::ALL] = true;
 
-#ifndef DYN_CACHE
+		} else
+			outputs[Output::ALL] = true;
+	} else outputs[Output::ALL] = true;
+
+
+#if METHOD == RECT_CACHE || METHOD == RECURSION
 	clear_cache();
 
 	int64_t start = time();
@@ -226,14 +263,25 @@ int main() {
 			cout << "Do not play if the probability of getting a red is: " << (REDS/(REDS+i+0.0)) << endl;
 			break;
 		}
-#endif
 
-#ifdef DYN_CACHE
+#elif METHOD == LINE_CACHE
+	if (outputs[Output::GRID])
+		cout << REDS << " x " << BLACKS << " ";
+
 	int64_t start = time();
 	fill_grid();
 	int64_t end = time();
 
-	cout << "Process took: " << (end-start) << "ms" << endl;
+	if (outputs[Output::ALL])
+		cout << "Process took: " << (end-start) << "ms" << endl;
+	else if (outputs[Output::TIME])
+		cout << (end-start);
+
+	for (int i=0; i<4; i++)
+		if (outputs[i]) {
+			cout << endl;
+			break;
+		}
 #endif
 	
 }
