@@ -11,15 +11,15 @@
 #define RECURSION  1
 #define LINE_CACHE 2
 
-#define METHOD LINE_CACHE
+#define METHOD RECT_CACHE
 
 
 #if METHOD == LINE_CACHE
-int SIZE = 12000;
+int SIZE = 20;
 int REDS = SIZE;
 int BLACKS = SIZE;
 #else
-const int SIZE = 12000;
+const int SIZE = 1000;
 const int REDS = SIZE;
 const int BLACKS = SIZE;
 #endif
@@ -32,8 +32,9 @@ const char RESET[10] = "\033[0m";
 enum Output {ALL, GRID, TIME, PROFIT};
 bool outputs[4] = {false, false, false, false};
 
-bool print = false;
-bool print_nums = true;
+bool print = true;
+bool print_nums = false;
+bool print_file = true;
 
 
 #if METHOD == RECT_CACHE || METHOD == RECURSION
@@ -175,6 +176,18 @@ double scanto(int red, int black){
 }//scanto
 #endif
 
+const unsigned char pixel_black[3] = {0, 0, 0};
+const unsigned char pixel_green[3] = {0, 255, 0};
+const unsigned char pixel_red[3]   = {255, 0, 0};
+
+void write_cell (FILE *fp, double val){
+	if (val < 0)
+		(void) fwrite(pixel_black, 1, 3, fp);
+	else if (val > 0)
+		(void) fwrite(pixel_green, 1, 3, fp);	
+	else
+		(void) fwrite(pixel_red, 1, 3, fp);
+}
 
 void fill_grid(){
 #if METHOD == RECURSION
@@ -186,6 +199,16 @@ void fill_grid(){
 		for (int j=0; j<BLACKS+1; j++)
 			fill(i,j);
 	cout << endl << cache[REDS][BLACKS] << endl;
+	if (print_file){
+		cout << "Saving output grid to 'out.ppm'" << endl;
+		FILE *fp = fopen("out.ppm", "wb");//Open ppm image file
+		(void) fprintf(fp, "P6\n%d %d\n255\n", REDS+1, BLACKS+1);
+		for (int i=0; i<REDS+1; i++)
+			for (int j=0; j<BLACKS+1; j++)
+				if (i == j) write_cell(fp, -1);
+				else write_cell(fp, cache[i][j]);
+		fclose(fp);//Close ppm image file
+	}
 #elif METHOD == LINE_CACHE
 	if (outputs[Output::ALL])
 		cout << "Solving for [" << REDS << "," << BLACKS << "] scan-progressively" << endl << flush;
